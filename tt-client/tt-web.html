@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+<script src="./tt2http-client.js"></script>
+<script>
+//var ttWebClient = new TTWebClient("172.18.0.45", 8081);
+</script>
+</head>
+<body>
+    <textarea id="log" style="width: 100%; height: 200px"></textarea><br />
+    <input type="text" id="text" value="name" />
+    <input type="text" id="text" value="password" /> 
+    <button onclick="send()">Click to Login</button>
+
+    <script>
+        // Connect to our server: node server.js
+        var socket = new WebSocket("ws://172.18.0.45:8081/");
+        socket.binaryType = "arraybuffer"; // We are talking binary
+
+        function send() {
+            if (socket.readyState == WebSocket.OPEN) {
+                socket.send("he");
+                log.value += "Sent: "+msg.text+"\n";
+            } else {
+                log.value += "Not connected\n";
+            }
+        }
+
+        socket.onopen = function() {
+            log.value += "Connected\n";
+        };
+
+        socket.onclose = function() {
+            log.value += "Disconnected\n";
+        };
+            
+        socket.onmessage = function(evt) {
+            try {
+                // Decode the Message
+                var msg = Message.decode(evt.data);
+                log.value += "Received: "+msg.text+"\n";
+            } catch (err) {
+                log.value += "Error: "+err+"\n";
+            }
+        };
+        /*
+        var ttWebClient = new TTWebClient("127.0.0.1", 8080);
+        function send() {
+            ttWebClient.login("test");
+        }*/
+    </script>
+</body>
+</html>
