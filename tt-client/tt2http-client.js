@@ -21,24 +21,52 @@
 *
 */
 
-<<<<<<< HEAD
 //construct function for TTWebClient.
-function TTWebClient(ipv4, port){
+function TTWebClient(ipv4, port, onMessageReceived){
 	this.ipv4 = ipv4;
 	this.port = port;
 	this.socket = new WebSocket("ws://" + ipv4 + ":" + port);
-	//this.socket.binaryType = "arraybuffer";
-	this.socket.onopen = function(evt){this._onopen(evt)};
-	this.socket.onclose = function(evt){this._onclose(evt)};
-	this.socket.onmessage = function(message){this._onmessage(message)};
-	this.socket.onerror = function(evt){this._onerror(evt)};
+	this.socket.binaryType = "arraybuffer";
+
+	this.socket.onopen = function(evt){
+		console.log("Connected\n");
+	};
+
+	this.socket.onclose = function(evt){
+		console.log("Disconnected\n");
+	};
+
+	this.socket.onmessage = function(message){
+		try {
+        	// Decode the Message
+	        console.log("Received data: " + message.data);
+	    } catch (err) {
+	        console.log("Error occured: " + err + "\n");
+	    }
+
+	    onMessageReceived(message.data);
+	};
+
+	this.socket.onerror = function(evt){
+		console.log("Error occured: " + evt.data + "\n");
+	};
 }
 
 TTWebClient.prototype.login = function(userName, password){
-	this._sendMessage(userName + password);
+	this.sendMessage(userName + password);
 }
 
-TTWebClient.prototype._sendMessage = function(message){
+TTWebClient.prototype.generateJsonMsg = function(messageType, messageData){
+	var msg = new this._message(messageType, messageData);
+	return JSON.stringify(msg);
+}
+
+TTWebClient.prototype._message = function(messageType, messageData){
+	this.messageType = messageType;
+	this.messageData = messageData;
+}
+
+TTWebClient.prototype.sendMessage = function(message){
 	if (this.socket.readyState == WebSocket.OPEN) {
         this.socket.send(this._beforeSend(message));
     } else {
@@ -50,26 +78,5 @@ TTWebClient.prototype._beforeSend = function(message){
 	return message;
 }
 
-TTWebClient.prototype._onopen = function(evt){
-	console.log("Connected\n");
-}
-
-TTWebClient.prototype._onclose = function(evt){
-	console.log("Disconnected\n");
-}
-
-//TODO:判断message类型并调用相应的onXXXMessageReceived()方法进行处理
-TTWebClient.prototype._onmessage = function(message){
-	try {
-        // Decode the Message
-        console.log("Received data: " + message.data);
-    } catch (err) {
-        console.log("Error occured: " + err + "\n");
-    }
-}
-
-TTWebClient.prototype._onerror = function(evt){
-	console.log("Error occured: " + evt.data + "\n");
-}
 
 
