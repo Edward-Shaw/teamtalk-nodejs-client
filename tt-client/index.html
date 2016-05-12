@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf8" /> 
+
+<!--20160105-->
+<link rel="stylesheet" type="text/css" href="css/jquery.atwho.min.css">
+
+
+<script src="./Long.min.js"></script>         <!-- https://raw.github.com/dcodeIO/Long.js/master/dist/Long.min.js -->
+<script src="./ByteBufferAB.min.js"></script> <!-- https://raw.github.com/dcodeIO/ByteBuffer.js/master/dist/ByteBufferAB.min.js -->
+<script src="./ProtoBuf.min.js"></script>     <!-- https://raw.github.com/dcodeIO/ProtoBuf.js/master/dist/ProtoBuf.min.js -->
+<script src="./tt2http-client.js"></script>
+
+<!--20160105-->
+<script src="js/jquery.min.js"></script>
+<script src="js/jquery.caret.min.js"></script>
+<script src="js/jquery.atwho.min.js"></script>
+
+
+<style type="text/css">
+.li_buddy { }
+.title { background-color: #9988CC; margin-top: 0px;} 
+ul { padding-left: 5px; list-style-type: none;}
+</style>
+</head>
+<body>
+
+<div>
+<input type="text" id="username" placeholder="Username"/>
+<input type="password" id="password" placeholder="Password"/>
+<button id="btn_login">Login</button> <span id="span_conn"></span>
+<button id="btn_logout">Logout</button> <span id="span_conn"></span>
+</div>
+
+<table style="width: 100%;">
+	<tr>
+		<td>
+<!-- me -->
+<div style="width: 200px; height: 80px; border: 1px solid #333; ">
+	<p><img src="" id="img_avatar" width="32" /><span id="span_username"></span></p>
+</div>
+
+<!-- groups -->
+<div style="width: 200px; height: 200px; border: 1px solid #999; overflow-y:auto; overflow-x:hidden;">
+	<p class="title">最近会话 <button id="btn_reload_sessions">刷新</button></p>
+	<ul id="ul_sessions"></ul>
+</div>
+
+<!-- groups -->
+<div style="width: 200px; height: 200px; border: 1px solid #999; ">
+	<p class="title">群/讨论组 <button id="btn_reload_groups">刷新</button></p>
+	<ul id="ul_groups"></ul>
+</div>
+
+<!-- buddy list -->
+<div style="width: 200px; height: 300px; border: 1px solid #999; ">
+	<p class="title">Buddies</p>
+	<ul id="ul_buddies"></ul>
+</div>
+		</td>
+		<td>  <!-- 右侧 -->
+
+<div>
+	<p style="margin: 0px; background-color: #999;">创建组 <input type="text" id="txt_group_name" placeholder="讨论组名"/> <button id="btn_create_group">提交</button></p>
+	<div id="div_group_users"></div>
+</div>
+
+<div>
+	<p style="margin: 0px; background-color: #999;">当前交谈对象详情</p>
+	<div id="div_ui_detail"></div>
+</div>
+
+<div style="width: 100%; border: 1px solid #999;">
+	<p style="text-align: right; margin: 0px; background-color: #999;"> <button id="btn_history">历史消息</button> <button id="btn_close_session">&times;</button></p>
+	<div style="height: 300px; overflow-y:auto; overflow-x:hidden;" id="div_chatting">Chating</div>
+</div>
+
+<div>
+	<p style="margin: 0px; background-color: #ccc;">
+		<button id="btn_emotion">Emotion</button><button id="btn_photo">Photo</button> <input id="file_upload" type="file" size="30" name="fileselect" />
+	</p>
+	<textarea style="width: 100%; height: 50px" id="txt_editor"></textarea>
+	<p style="text-align: right; margin: 0px; ">
+		<span id="span_sending_state"></span><button id="btn_send">Send</button>
+	</p>
+</div>
+		</td>
+	</tr>
+</table>
+
+<textarea id="log" style="width: 100%; height: 150px"></textarea><br />
+
+<div id="div_emotions"></div>
+
+<script type="text/javascript">
+
+var client = null;
+var _emotions = null;
+
+var appendNewMessageToChattingWindow = function($chatting, from, message, color){
+
+	var reEmotions = /\[.*?\]/gi;
+	var msg = message.replace(reEmotions, function(word){
+		var r = _emotions[word] != undefined ? 
+			'<img src="/emotion/emotions/'+_emotions[word] + '" />' : word;
+		return r;
+	});
+
+	$chatting.append(
+		'<div style="border: 1px solid #CCC; margin-bottom: 2px;">' + '<p style="margin: 0px; background-color: ' + color + ';">' + from + ':</p>'
+		+ '<p style="margin: 0px;">' + msg + '</p>'
+		+'</div>'
+		);
+
+	$chatting.scrollTop($chatting.scrollTop() + 20);
+
+	return $chatting;
+}
+
+var uploadFile = function(){
+	var formData = new FormData();//构造空对象，下面用append 方法赋值。  
+	//formData.append("policy", "");  
+	//formData.append("signature", "");  
+	formData.append("image", $("#file_upload")[0].files[0]);
+    
+    var url = "http://172.18.0.236:8081/upload";  
+    $.ajax({  
+        url : url,  
+        type : 'POST',  
+        data : formData,
+
+        /**   
+         * 必须false才会避开jQuery对 formdata 的默认处理   
+         * XMLHttpRequest会对 formdata 进行正确的处理   
+         */  
+        processData : false,  
+        /**   
+         *必须false才会自动加上正确的Content-Type   
+         */  
+        contentType : false,
+        success: function(responseStr) {
+        	var jsonObject = JSON.parse(responseStr);
+        	
+        	var imgurl = 'http://172.18.0.236:8700/' + jsonObject.path;
+        	var msg = "&$#@~^@[{:" + imgurl + ":}]&$~@#@";
+        	console.log(msg);
+        	var isGroupMsg = $("#btn_send").data('group');
+            client.sendMessage($("#btn_send").data('dest'), msg, isGroupMsg ? 0x11 : 0x01);
+
+        	msg = '<img src="' + imgurl + '" width="200"/>';
+        	appendNewMessageToChattingWindow($("#div_chatting"), $("#btn_send").data('dest'), msg, '#999');
+
+        	console.log(result);
+        },  
+        error: function(responseStr) {
+        	alert(responseStr);
+            //alert("失败:" + JSON.stringify(responseStr));
+        }  
+    }); 
+}
+
+$(function(){
+
+	$("#btn_create_group").click(function(event){
+		var title = $("#txt_group_name").val();
+		if(title.length == 0){ alert("Group name can not be empty!"); return false; }
+
+		var list = [];
+		$("#div_group_users").children().each(function(idx, u){
+			list.push($(u).data('uid'));
+		});
+
+		if(list.length < 2){
+			alert("Group members must > 1!"); return false;
+		}
+
+		client.createGroup(title, "", list);
+		///group_created 回掉确认创建结果
+
+		$("#txt_group_name").val('');
+		$("#div_group_users").empty();
+	});
+
+	$("#btn_reload_sessions").click(function(event){
+		sessions = {};
+		client.getAllUserContactSession();		///刷新最近会话列表
+		client.getUnreadMessageCount();
+	});
+
+	$("#btn_close_session").click(function(event){
+		$("#div_chatting").html('');
+		$("#txt_editor").attr('placeholder', '');
+		$("#btn_send").data('dest', '').data('userid', '').data('group', undefined);
+		$("#div_ui_detail").html('');
+
+		//TODO: send message to TT
+	});
+
+	$("#btn_history").click(function(event){
+		var btn = $("#btn_send");
+		var isGroupMsg = btn.data('group');
+		var sessionType = isGroupMsg ? 0x02 : 0x01;
+		var msg_id_begin = 0;
+		var sessionId = btn.data('dest');
+
+		if(latest_msg_id[sessionType] != undefined){
+			msg_id_begin = latest_msg_id[sessionType][sessionId];
+			msg_id_begin = msg_id_begin == undefined ? 0 : msg_id_begin;
+		}
+
+		/*session_id, msg_id_begin, session_type, msg_cnt*/
+		client.getMsgList(sessionId, msg_id_begin, sessionType, 10);
+	});
+
+	$('#btn_photo').click(function(event){
+		uploadFile();
+	});
+
+	///initialize emotions
+	$.getJSON("/emotion/emotions.json", function(result){
+		_emotions = result[0];
+		var i = 0;
+		for(var attr in _emotions){
+			$("#div_emotions").append('<img data-key="' + attr + '" class="img_emotion" src="/emotion/emotions/' + _emotions[attr] + '" />');
+			i += 1;
+			if(i % 18 == 0){
+				$("#div_emotions").append('<br />');
+			}
+		};
+		$("#div_emotions").css("position", "absolute"); 
+		$("#div_emotions").css("top", $("#btn_emotion").offset().top + 50); 
+        $("#div_emotions").css("left", $("#btn_emotion").offset().left).hide(); 
+
+		$("#btn_emotion").click(function(){
+			$("#div_emotions").toggle();
+		});
+
+		$(".img_emotion").click(function(event){
+			$("#txt_editor").val($("#txt_editor").val() + $(event.target).data('key'));
+		});
+	});
+
+	$("#btn_send").click(function(event){
+		var btn = $(event.target);
+		if(btn.data('dest') == ''){
+			$("#span_sending_state").html('No session actived');
+			return false;
+		}
+		var isGroupMsg = btn.data('group'); console.log("This is a group message ? ", isGroupMsg);
+		client.sendMessage(btn.data('dest'), $("#txt_editor").val(), isGroupMsg ? 0x11 : 0x01);
+
+		appendNewMessageToChattingWindow($("#div_chatting"), btn.data('dest'), $("#txt_editor").val(), '#999');
+
+		$("#txt_editor").val('');
+		$("#span_sending_state").html('Sending ...');
+	});
+
+	var latest_msg_id = {};
+	var sessions = {};
+
+	/**
+	required uint32 session_id = 1;
+	required SessionType session_type = 2;
+	required uint32 unread_cnt = 3;
+	required uint32 latest_msg_id = 4;
+	required bytes latest_msg_data = 5;
+    required MsgType latest_msg_type = 6;
+    required uint32 latest_msg_from_user_id = 7; 
+    */
+	var onUnreadListReceived = function(list){
+		$("#ul_sessions").empty();
+
+		$(list).each(function(idx, ele){
+			var sess = sessions[ele.session_type + '_' + ele.session_id];
+			if(sess == undefined){
+				sessions[ele.session_type + '_' + ele.session_id] = ele;
+				sess = ele;
+			}else{
+				///合并两个object
+				if(typeof ele[attr] != 'function'){
+					sess[attr] = ele[attr];
+				}
+			}
+		});
+
+		var array = [];
+		for(var attr in sessions){
+			array.push(sessions[attr]);
+		}
+		onRecentSessionReceived(array);
+	}
+
+	/*
+	required uint32 session_id = 1;
+	required SessionType session_type = 2;
+    required SessionStatusType session_status = 3;
+	required uint32 updated_time = 4;
+	required uint32 latest_msg_id = 5;
+	required bytes latest_msg_data = 6;
+    required MsgType latest_msg_type = 7;
+    required uint32 latest_msg_from_user_id = 8;
+    */
+	var onRecentSessionReceived = function(list){
+		$("#ul_sessions").empty();
+
+		var _TYPES = {1: 'S', 2: 'G'};
+
+		$(list).each(function(idx, ele){
+			var sess = sessions[ele.session_type + '_' + ele.session_id];
+			if(sess == undefined){
+				sessions[ele.session_type + '_' + ele.session_id] = ele;
+				sess = ele;
+			}else{
+				///合并两个object
+				for(var attr in ele){
+					if(typeof ele[attr] != 'function'){
+						sess[attr] = ele[attr];
+					}
+				}
+			}
+
+			var alias = ele.session_id;
+			if(ele.session_type == 1 && _buddies[ele.session_id] != undefined){
+				alias = _buddies[ele.session_id].user_nick_name;
+			}
+			//console.log(ele.session_type, ele.unread_cnt, 'nickname:' + alias);
+
+			var msgBody = ele.latest_msg_data.toString('utf8');
+			var indexStart = msgBody.indexOf("&$#@~^@[{:"), indexEnd = msgBody.indexOf(":}]&$~@#@");
+			if(indexStart >= 0 && indexEnd >= 0){
+				msgBody = '[图片]';
+			}
+
+			var buf = dcodeIO.ByteBuffer.fromUTF8(JSON.stringify(ele));
+			$("#ul_sessions").append('<li data-sid="' + ele.session_id + '" data-stype="' + ele.session_type + '"'
+				+ ' data-session="' + buf.toString("base64") + '"'
+				+ ' alt="[' + ele.updated_time + ']"'
+				+ ' class="li_session"><button class="btn_remove_session">删除</button>'
+				+ '[' + _TYPES[ele.session_type] + ']' + alias 
+				+ '(' + (sess.unread_cnt == undefined ? 0 : sess.unread_cnt) + ')'
+				+ '<span style="color: #CCC;">' + msgBody + '</span>'
+				+ '</li>');
+		});
+
+		///删除会话
+		$(".btn_remove_session").click(function(event){
+			var btn = $(event.target);
+			console.log('remove_session', btn.parent().data('stype'), btn.parent().data('sid'));
+			client.removeSession(btn.parent().data('stype'), btn.parent().data('sid'));
+			///session_removed 回掉中可以确认退出成功
+		});
+		
+		///点击动作
+		$(".li_session").click(function(event){
+			var selected = $(event.target);
+			var sess = dcodeIO.ByteBuffer.fromBase64(selected.data('session')).toString("utf8");
+			sess = JSON.parse(sess);
+
+			var gidx = selected.data("sid");
+            var buddies_name = [];
+            $(_groups[gidx].group_member_list).each(function(i, e){
+                var ui = _buddies[e];
+                buddies_name.push({real:ui.user_real_name, nick: ui.user_nick_name});
+            });
+            
+            $('#txt_editor').atwho({
+                startWithSpace: false,
+                displayTpl: '<li>${nick}</li>',
+                insertTpl: '@${real}',
+                searchKey: 'nick',
+                at: "@",
+                data: buddies_name
+            });
+
+			$("#btn_send").data('dest', sess.session_id).data('group', sess.session_type == 2);
+			$("#txt_editor").attr('placeholder', 'Chating with: ' + sess.session_id);
+			
+			///read ack
+			if(sess.unread_cnt != undefined && sess.unread_cnt > 0){
+				console.log("read ack ...", sess.unread_cnt);
+				client.sendMsgReadAck(sess.session_id, sess.latest_msg_id, sess.session_type);
+
+				sess.unread_cnt = 0;
+			}
+		});
+	}
+
+	var onMessageHistoryReceived = function(res){
+		/**
+		required IM.BaseDefine.SessionType session_type = 2;
+		required uint32 session_id = 3;
+		required uint32 msg_id_begin = 4;
+		repeated IM.BaseDefine.MsgInfo msg_list = 5;
+		*/
+
+		if(latest_msg_id[res.session_type] == undefined){
+			latest_msg_id[res.session_type] = {};
+		}
+		latest_msg_id[res.session_type][res.session_id] = res.msg_id_begin;
+		$(res.msg_list).each(function(idx, ele){
+			/**
+			required uint32 msg_id = 1;
+			required uint32 from_session_id = 2;   //发送的用户id
+			required uint32 create_time = 3;
+			required MsgType msg_type = 4;
+			required bytes msg_data = 5;
+			*/
+			if(ele.msg_type != 0x01 && ele.msg_type != 0x11){
+				appendNewMessageToChattingWindow($("#div_chatting"), ele.from_session_id, "不支持的消息类型", '#C1FFC1');
+			} else {
+				appendNewMessageToChattingWindow($("#div_chatting"), ele.from_session_id, ele.msg_data.toString('utf8'), '#C1FFC1');
+			}
+		});
+	}
+
+	var onMessageReceived = function(msg, notify){
+
+		var indexStart = msg.msg_text.indexOf("&$#@~^@[{:"), indexEnd = msg.msg_text.indexOf(":}]&$~@#@");
+		if(indexStart >= 0 && indexEnd >= 0){
+			msg.msg_text = '<img src="' + msg.msg_text.substring(indexStart + 10, indexEnd) + '" />';
+		}
+
+		if(msg.msg_type != 0x01 && msg.msg_type != 0x11){
+			appendNewMessageToChattingWindow($("#div_chatting"), msg.from_session_id, "不支持的消息类型", '#C1FFC1');
+		}else{
+			appendNewMessageToChattingWindow($("#div_chatting"), msg.from_user_id, msg.msg_text, '#00C');
+		}
+		if(notify){
+			alert('有@你的消息');
+		}
+	}
+
+	var _buddies = {};
+	var _groups = {};
+
+	/**
+	required uint32 user_id = 1;
+	required uint32 user_gender = 2;
+	required string user_nick_name = 3;
+	required string avatar_url = 4;
+	required uint32 department_id = 5;
+	required string email = 6;
+	required string user_real_name = 7;
+	required string user_tel = 8;
+	required string user_domain = 9;
+    required uint32 status = 10;
+    */
+	var onBuddiesUpdated = function(buddies){
+		///console.log('onBuddiesUpdated:' + buddies);
+		$("#ul_buddies").empty();
+
+		$(buddies).each(function(index, element){
+			var buf = dcodeIO.ByteBuffer.fromUTF8(JSON.stringify(element));
+			$("#ul_buddies").append('<li class="li_buddy" data-ui="' + buf.toString("base64") + '" data-userid="' + element.user_id + '">' 
+				+ '<button class="btn_create_group">+组</button>'
+				+ '<img src="' + element.avatar_url + '" width="16" />'
+				+ element.user_nick_name + '(' + element.user_real_name + ')' + '</li>');
+
+			_buddies[element.user_id] = element;
+ 		});
+
+ 		///加组
+ 		$(".btn_create_group").click(function(event){
+ 			var ui = JSON.parse(dcodeIO.ByteBuffer.fromBase64($(event.target).parent().data('ui')).toString("utf8"));
+ 			$("#div_group_users").append('<button id="btn_group_user_' + ui.user_id + '" data-uid="' + ui.user_id + '">' + ui.user_nick_name + '</button>');
+ 			$("#btn_group_user_" + ui.user_id).click(function(event){
+ 				$(event.target).remove();
+ 			});
+ 		});
+
+		$(".li_buddy").click(function(event){
+			var selected = $(event.target);
+			var ui = dcodeIO.ByteBuffer.fromBase64(selected.data('ui')).toString("utf8");
+			ui = JSON.parse(ui);
+
+			$("#btn_send").data('dest', selected.data('userid')).data('group', false);
+			$("#txt_editor").attr('placeholder', 'Chating with: ' + ui.user_nick_name);
+
+			var _GENDERS = {1: "男", 2: "女", 0: "Alien"};
+			var _STATES = {0:"在职", 1:"试用期", 2:"正式", 3:"离职", 4:"实习"};
+
+			$("#div_ui_detail").html('<img src="'+ ui.avatar_url +'" width="48" />' 
+				+ _GENDERS[ui.user_gender] + "," + ui.user_nick_name + ", [" + _STATES[ui.status] + "]"
+				+ 'department: ' + ui.department_id + ", " + ui.email + ', ' + ui.user_tel + ', ' + ui.user_domain
+				);
+		});
+	}
+
+	var onGroupInfoListReceived = function(group_info_list){
+		$("#ul_groups").empty();
+
+		$(group_info_list).each(function(index, element){
+			$("#ul_groups").append('<li class="li_group" data-groupid="' + element.group_id + '">' + element.group_name + '</li>');
+			_groups[element.group_id] = element;
+		});
+
+		$(".li_group").click(function(event){
+			var selected = $(event.target);
+			var gidx = selected.data('groupid');
+
+			var buddies_name = [];
+			$(_groups[gidx].group_member_list).each(function(i, e){
+				var ui = _buddies[e];
+				buddies_name.push({real:ui.user_real_name, nick: ui.user_nick_name});
+			});
+			
+	 		$('#txt_editor').atwho({
+				startWithSpace: false,
+				displayTpl: '<li>${nick}</li>',
+				insertTpl: '@${real}',
+				searchKey: 'nick',
+			  	at: "@",
+			  	data: buddies_name
+			});
+
+			$("#btn_send").data('dest', gidx).data('group', true);
+			$("#txt_editor").attr('placeholder', 'Chating with group: ' + selected.html());
+		});
+	}
+
+	var onConnectionStateChanged = function(state, evt){
+		switch(state){
+		case 'connected':
+			$("#span_conn").html("Connected!");
+			client.login($("#username").val(), $("#password").val());
+			break;
+		case 'error':
+			$("#span_conn").html("BAD!");
+			break;
+		case 'closed':
+			$("#span_conn").html("CLOSED!");
+			break;
+		}
+	};
+
+	/**
+	required uint32 user_id = 1;
+	required uint32 session_id = 2;				
+	required uint32 msg_id = 3;
+	required IM.BaseDefine.SessionType session_type = 4;
++	*/
+	var onMessageAck = function(msg_ack){
+		//alert("消息发送成功，msg ack from: " + msg_ack.session_id);
+		//appendNewMessageToChattingWindow($("#div_chatting"), msg_ack.session_id, "这是系统消息：对方收到你的消息了！", '#C1FFC1');
+		$("#span_sending_state").html('Sent success');
+	}
+
+	$("#log").val("");
+
+	$("#btn_login").click(function(event){
+
+		if($("#username").val() == '' || $("#password").val() == ''){
+			$("#span_conn").html("username / password can not be empty!");
+			return false;
+		}
+
+		$("#span_conn").html("...");
+		client = new TTWebClient("172.18.0.236", "8081", onMessageReceived, onConnectionStateChanged, {user_name: $("#username").val()});
+		client.on('buddy_list', onBuddiesUpdated);
+		client.on('msg_ack', onMessageAck);
+		client.on('group_info_list', onGroupInfoListReceived);
+		client.on("logedin", function(ui){
+			if(ui != null && ui.result_code != undefined && ui.result_code != 0){
+				alert(ui.result_string);
+				return;
+			}
+
+			var _GENDERS = {1: "男", 2: "女", 0: "Alien"};
+			var _STATES = {0:"在职", 1:"试用期", 2:"正式", 3:"离职", 4:"实习"};
+			/**
+			required uint32 user_id = 1;
+			required uint32 user_gender = 2;
+			required string user_nick_name = 3;
+			required string avatar_url = 4;
+			required uint32 department_id = 5;
+			required string email = 6;
+			required string user_real_name = 7;
+			required string user_tel = 8;
+			required string user_domain = 9;
+		    required uint32 status = 10;
+		    */
+			$("#img_avatar").attr("src", ui.avatar_url);
+			$("#span_username").html(_GENDERS[ui.user_gender] + "," + ui.user_nick_name + ", [" + _STATES[ui.status] + "]");
+ 		});
+		client.on('msg_list', onMessageHistoryReceived);
+		client.on('unread_cnt', onUnreadListReceived);
+		client.on('recent_sessions', onRecentSessionReceived);
+		client.on('session_removed', function(rsp){
+			/*required uint32 user_id = 1;
+		    required uint32 result_code = 2;
+		    required IM.BaseDefine.SessionType session_type = 3;
+		    required uint32 session_id = 4;
+		    */
+		    console.log('removed', rsp);
+		    $("#btn_reload_sessions").click();
+		});
+		client.on('group_created', function(rsp){
+			/*IMGroupCreateRsp{
+		     required uint32 user_id = 1; 
+		     required uint32 result_code = 2;
+		     optional uint32 group_id = 3;
+		     required string group_name = 4;
+		     repeated uint32 user_id_list = 5;
+			*/
+			console.log('created', rsp);
+			onGroupInfoListReceived([rsp]);
+		}).on('exception', function($param1, $param2){
+			console.log("err", $param2, "param", $param1);
+		});
+	});
+
+	$("#btn_logout").click(function(event){
+		if(client == undefined || client == null){
+			alert("你还没有登录！");
+		}
+		client.logout();
+	});
+});
+</script>
+</body>
+</html>
