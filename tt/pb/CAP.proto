@@ -1,0 +1,6 @@
+package CAP;
+
+message EasyHeader{
+    required uint32 service = 1;
+    required uint32 command = 2;
+}
