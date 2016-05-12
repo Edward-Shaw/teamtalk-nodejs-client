@@ -1,11 +1,10 @@
+package IM.Login;
 import "IM.BaseDefine.proto";
+option java_package = "com.mogujie.tt.protobuf";
+//option java_outer_classname = "MOGUJIEIMMessage";
+option optimize_for = LITE_RUNTIME;
 
 //service id:	0x0001
-
-message IMMsgTest {
-	required string hello = 1;
-	required string world = 2;
-}
 
 message IMMsgServReq{
 	//cmd id:		0x0101
