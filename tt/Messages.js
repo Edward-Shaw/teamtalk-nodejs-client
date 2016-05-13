@@ -4,7 +4,7 @@ var path = require("path"),
 
 
 var builders = new Object();
-var protos = ["IM.Group", "IM.Other", "IM.Buddy", "IM.Login", "IM.Server", "IM.File", "IM.Message", "IM.SwitchService"];
+var protos = ["IM.Group", "IM.Other", "IM.Buddy", "IM.Login", "IM.Server", "IM.File", "IM.Message", "IM.SwitchService", "CAP"];
 for(var p in protos){
 	builders[protos[p]] = pb.loadProtoFile(path.join(__dirname, "pb", protos[p] + ".proto"));
 }
